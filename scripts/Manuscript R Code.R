@@ -15,8 +15,9 @@ remotes::install_github("CmlMagneville/mFD")
 devtools::install_github("ahasverus/elbow", build_vignettes = TRUE)
 
 ###############################################
-## NOTE - multidimFD FUNCTION MUST BE LOADED
-## IT CAN BE DOWNLOADED FROM XXXX
+## NOTE - multidimFD FUNCTION MUST BE LOADED 
+## THE CODE IS AVAILABLE IN THE
+## SCRIPTS FOLDER ON THE GITHUB REPOSITORY
 ###############################################
 
 ##################################
