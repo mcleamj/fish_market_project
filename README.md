@@ -10,3 +10,5 @@ Repository for Emma Touchie thesis project
 :file_folder:[outputs](/outputs) contains outputs and results stored as .Rdata, .rds, etc.
 
 :file_folder:[figures](/figures) contains figures created during analyses
+
+# TESTING #

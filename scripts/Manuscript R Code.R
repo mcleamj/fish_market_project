@@ -41,7 +41,7 @@ if(!require(funrar)){install.packages("funrar"); library(funrar)}
 if(!require(coRanking)){install.packages("coRanking"); library(coRanking)}
 if(!require(phylolm)){install.packages("phylolm"); library(phylolm)}
 if(!require(fishtree)){install.packages("fishtree"); library(fishtree)}
-if(!require(ggridges)){install.packages("ggridges"); library(ggridges)}
+#if(!require(ggridges)){install.packages("ggridges"); library(ggridges)}
 if(!require(performance)){install.packages("performance"); library(performance)}
 library("rfishbase")
 library("mFD")
@@ -65,21 +65,21 @@ variablecol <- function(colvar, col, clim) {
 ## LOAD MICRONESIA SHAPEFILE ##
 ###############################
 
-FSM <- readRDS("gadm36_FSM_0_sp.rds")
+FSM <- readRDS("data/gadm36_FSM_0_sp.rds")
 
 ###################################################
 ## IMPORT SPECIES TRAITS AND TROPHIC INFORMATION ##
 ###################################################
 
-traits <- read.table("clean traits.txt")
+traits <- read.table("data/clean traits.txt")
 
-species_info <- read.table("clean species info.txt")
+species_info <- read.table("data/clean species info.txt")
 
 ####################################################
 ## IMPORT AND WRANGLE REEF AND LANDINGS DATA SETS ##
 ####################################################
 
-reef_data <- read.csv("clean reef data.csv")
+reef_data <- read.csv("data/clean reef data.csv")
 reef_meta <- reef_data[,1:6]
 reef_fish <- reef_data[,7:ncol(reef_data)]
 reef_log <- log10(reef_fish+1)
@@ -87,7 +87,7 @@ colnames(reef_log) <- gsub("\\.", " ", colnames(reef_log))
 reef_log <- as.matrix(reef_log)
 rownames(reef_log) <- paste("com",seq(1,nrow(reef_log),1))
 
-market_data <- read.csv("clean market data.csv")
+market_data <- read.csv("data/clean market data.csv")
 market_data$num_fishers_lines <- as.numeric(market_data$num_fishers_lines)
 market_meta <- market_data[,1:10]
 market_fish <- market_data[,11:ncol(market_data)]
@@ -100,7 +100,7 @@ rownames(market_log) <- paste("com",seq(1,nrow(market_log),1))
 ## LOAD GEOGRRAPHIC COORDINATES ##
 ##################################
 
-geo_coords <-read.table("geographic coordinates.txt")
+geo_coords <-read.table("data/geographic coordinates.txt")
 
 #######################
 ## BUILD TRAIT SPACE ##
@@ -139,9 +139,6 @@ vectors_3_4 <- envfit(trait_space$x[,3:4], traits)
 ## CALCUALTE FUNCTIONAL DIVERSITY FOR BOTH DATASETS ##
 ######################################################
 
-reef_FD <- dbFD(traits, reef_log, m=4, corr = "cailliez")
-reef_FD <- as.data.frame(reef_FD)
-reef_rao <- reef_FD$RaoQ
 reef_FD <- multidimFD(as.matrix(axes),weight=reef_log, check_species_pool=TRUE, verb=TRUE,
                       folder_plot=NULL, nm_asb_plot=NULL, Faxes_plot=NULL, Faxes_nm_plot=NULL, 
                       plot_pool=FALSE, col_bg="grey90", col_sp_pool="grey30", pch_sp_pool="+", cex_sp_pool=1,
@@ -149,24 +146,21 @@ reef_FD <- multidimFD(as.matrix(axes),weight=reef_log, check_species_pool=TRUE, 
 
 sp_dist <- as.matrix(vegdist(scale(traits), method = "euclidean"))
 
-reef_hill <- alpha.fd.hill(reef_log, sp_dist, tau="mean", q=1)
-reef_hill <- reef_hill$asb_FD_Hill
+reef_entropy <- alpha.fd.hill(reef_log, sp_dist, tau="mean", q=1)
+reef_entropy <- reef_entropy$asb_FD_Hill
 
-reef_FD <- data.frame(reef_FD, reef_rao, reef_hill = reef_hill)
+reef_FD <- data.frame(reef_FD, reef_entropy = reef_entropy)
 
 # LANDINGS #
-market_FD <- dbFD(traits, market_log, m=4, corr = "cailliez")
-market_FD <- as.data.frame(market_FD)
-market_rao <- market_FD$RaoQ
 market_FD <- multidimFD(as.matrix(axes),weight=market_log, check_species_pool=TRUE, verb=TRUE,
                         folder_plot=NULL, nm_asb_plot=NULL, Faxes_plot=NULL, Faxes_nm_plot=NULL, 
                         plot_pool=FALSE, col_bg="grey90", col_sp_pool="grey30", pch_sp_pool="+", cex_sp_pool=1,
                         pch_sp=21, col_sp="#1145F0", transp=50 ) 
 
-market_hill <- alpha.fd.hill(market_log, sp_dist, tau="mean", q=1)
-market_hill <- market_hill$asb_FD_Hill
+market_entropy <- alpha.fd.hill(market_log, sp_dist, tau="mean", q=1)
+market_entropy <- market_entropy$asb_FD_Hill
 
-market_FD <- data.frame(market_FD, market_rao, market_hill=market_hill)
+market_FD <- data.frame(market_FD, market_entropy=market_entropy)
 
 
 ########################################################################
@@ -230,7 +224,8 @@ plot(density(reef_dev$deviation),xlim=range(c(reef_dev-1,landings_dev+1)),
 polygon(density(reef_dev$deviation),col=adjustcolor("blue",alpha.f = 0.4),border="blue")
 polygon(density(landings_dev$deviation),col=adjustcolor("red",alpha.f = 0.4),border="red")
 title("Mean Deviation/Preference")
-
+legend("topleft", legend=c("Reefs","Landings"),
+       pch=19,col=c("blue","red"))
 
 ######################################
 ## SPECIES VULNERABILITY TO FISHING ##
@@ -490,22 +485,22 @@ ppc_dens_overlay(y, yrep)
 ppc_stat(y, yrep, stat="mean")
 
 ##################
-# HILL DIVERSITY #
+# entropy DIVERSITY #
 ##################
 
-reef_hill_model <- stan_glmer((FD_q1+1) ~ (1 | geographic/Site), data=reef_models,
+reef_entropy_model <- stan_glmer((FD_q1+1) ~ (1 | geographic/Site), data=reef_models,
                              family=Gamma(link="log"),chains=4, iter=2000)
-reef_hill <- as.matrix(reef_hill_model)
-reef_hill <- (exp((reef_hill[,18:27]) + reef_hill[,1])) - 1
-colnames(reef_hill) <- geo_coords$geographic
-mcmc_areas(reef_hill)
-reef_hill <- apply(reef_hill, 2, median)
-plot(reef_raw_avg$FD_q1, reef_hill,pch=19,
-     xlim=range(c(reef_raw_avg$FD_q1, reef_hill)),
-     ylim=range(c(reef_raw_avg$FD_q1, reef_hill)))
+reef_entropy <- as.matrix(reef_entropy_model)
+reef_entropy <- (exp((reef_entropy[,18:27]) + reef_entropy[,1])) - 1
+colnames(reef_entropy) <- geo_coords$geographic
+mcmc_areas(reef_entropy)
+reef_entropy <- apply(reef_entropy, 2, median)
+plot(reef_raw_avg$FD_q1, reef_entropy,pch=19,
+     xlim=range(c(reef_raw_avg$FD_q1, reef_entropy)),
+     ylim=range(c(reef_raw_avg$FD_q1, reef_entropy)))
 abline(0,1)
 y <- reef_models$FD_q1+1
-yrep <- posterior_predict(reef_hill_model, draws=100)
+yrep <- posterior_predict(reef_entropy_model, draws=100)
 ppc_dens_overlay(y, yrep)
 ppc_stat(y, yrep, stat="mean")
 
@@ -651,21 +646,21 @@ ppc_dens_overlay(y, yrep)
 ppc_stat(y, yrep, stat="mean")
 
 ##################
-# HILL DIVERSITY #
+# entropy DIVERSITY #
 ##################
 
-landings_hill_model <- stan_glmer((FD_q1+1) ~ (1 | geographic) + (1 | Fisher.Name),
+landings_entropy_model <- stan_glmer((FD_q1+1) ~ (1 | geographic) + (1 | Fisher.Name),
                                    data=landings_models,
                                  family=Gamma(link="log"),chains=4, iter=2000 )
-landings_hill <- as.matrix(landings_hill_model)
-landings_hill <- (exp((landings_hill[,117:126]) + landings_hill[,1])) - 1
-colnames(landings_hill) <- geo_coords$geographic
-mcmc_areas(landings_hill)
-landings_hill <- apply(landings_hill, 2, median)
-plot(landings_raw_avg$FD_q1, landings_hill,pch=19)
+landings_entropy <- as.matrix(landings_entropy_model)
+landings_entropy <- (exp((landings_entropy[,117:126]) + landings_entropy[,1])) - 1
+colnames(landings_entropy) <- geo_coords$geographic
+mcmc_areas(landings_entropy)
+landings_entropy <- apply(landings_entropy, 2, median)
+plot(landings_raw_avg$FD_q1, landings_entropy,pch=19)
 model_data <- na.omit(landings_models[,c("FD_q1","geographic","Fisher.Name")])
 y <- model_data$FD_q1+1
-yrep <- posterior_predict(landings_hill_model, draws=100)
+yrep <- posterior_predict(landings_entropy_model, draws=100)
 ppc_dens_overlay(y, yrep)
 ppc_stat(y, yrep, stat="mean")
 
@@ -924,29 +919,29 @@ mtext("D", font=2, cex=1.5, adj=-0.1, line=0.5)
 ##############################
 
 ########
-# HILL #
+# entropy #
 ########
 
 graphics.off()
 par(mfrow=c(1,2))
 
 ## REEF 
-map_color <- variablecol(reef_hill, col=brewer.oranges(length(reef_hill)),
-                         clim=range(c(reef_hill, landings_hill)))
+map_color <- variablecol(reef_entropy, col=brewer.oranges(length(reef_entropy)),
+                         clim=range(c(reef_entropy, landings_entropy)))
 scatter2D(geo_coords$X, geo_coords$Y, 
-          pch=19, colvar = reef_hill,
+          pch=19, colvar = reef_entropy,
           colkey = TRUE, cex=0,xlab=NA,ylab=NA,
           xlim=c(162.89,163.045),ylim=c(5.255,5.375),
-          col = brewer.oranges(length(reef_hill)),
-          clim=range(c(reef_hill, landings_hill)))
+          col = brewer.oranges(length(reef_entropy)),
+          clim=range(c(reef_entropy, landings_entropy)))
 rect(par("usr")[1],par("usr")[3],par("usr")[2],par("usr")[4],col = adjustcolor("lightblue",alpha=0.5))
 mtext(side=4,line=1,"Rao's Quadratic Entropy")
 plot(FSM, xlim=range(reef_data$X),
      ylim=range(reef_data$Y), col="grey",add=TRUE)
 scatter2D(geo_coords$X, geo_coords$Y, 
-          pch=21, colvar = reef_hill,
+          pch=21, colvar = reef_entropy,
           add=TRUE,colkey = FALSE, xlab=NA,ylab=NA,
-          cex=(reef_hill/max(c(reef_hill,landings_hill)))*4,
+          cex=(reef_entropy/max(c(reef_entropy,landings_entropy)))*4,
           #cex=4,
           col = 1, bg=map_color)
 title("Reef Observations")
@@ -954,30 +949,30 @@ mtext("(a)",line=1,font=2,adj=-0.1,cex=1.75)
 
 
 ## LANDINGS
-map_color <- variablecol(landings_hill, col=brewer.oranges(length(landings_hill)),
-                         clim=range(c(reef_hill, landings_hill)))
+map_color <- variablecol(landings_entropy, col=brewer.oranges(length(landings_entropy)),
+                         clim=range(c(reef_entropy, landings_entropy)))
 scatter2D(geo_coords$X, geo_coords$Y, 
-          pch=19, colvar = landings_hill,
+          pch=19, colvar = landings_entropy,
           colkey = TRUE, cex=0,xlab=NA,ylab=NA,
           xlim=c(162.89,163.045),ylim=c(5.255,5.375),
-          col = brewer.oranges(length(landings_hill)),
-          clim=range(c(reef_hill, landings_hill)))
+          col = brewer.oranges(length(landings_entropy)),
+          clim=range(c(reef_entropy, landings_entropy)))
 rect(par("usr")[1],par("usr")[3],par("usr")[2],par("usr")[4],col = adjustcolor("lightblue",alpha=0.5))
 mtext(side=4,line=1,"Rao's Quadratic Entropy")
 plot(FSM, xlim=range(reef_data$X),
      ylim=range(reef_data$Y), col="grey",add=TRUE)
 scatter2D(geo_coords$X, geo_coords$Y, 
-          pch=21, colvar = landings_hill,
+          pch=21, colvar = landings_entropy,
           add=TRUE,colkey = FALSE, xlab=NA,ylab=NA,
-          cex=(landings_hill/max(c(reef_hill,landings_hill)))*4,
+          cex=(landings_entropy/max(c(reef_entropy,landings_entropy)))*4,
           #cex=4,
           col = 1, bg=map_color)
 title("Fisheries Landings")
 mtext("(a)",line=1,font=2,adj=-0.1,cex=1.75)
 
 ## DIFFERNECE BARPLOT
-di_diff <- data.frame(geographic = names(landings_hill),
-                      diff = reef_hill - landings_hill)
+di_diff <- data.frame(geographic = names(landings_entropy),
+                      diff = reef_entropy - landings_entropy)
 di_diff$sign <- ifelse(di_diff$diff < 0, "negative","positive")
 
 ggplot(di_diff,aes(geographic,diff)) +
@@ -1238,20 +1233,20 @@ r2_bayes(reef_PC1_drivers_model)
 model_performance(reef_PC1_drivers_model)
 
 ##################
-# HILL DIVERSITY #
+# entropy DIVERSITY #
 ##################
 
-reef_hill_drivers_model <- stan_glmer((FD_q1 +1)  ~ scale(Axis.1) + scale(Axis.2) + scale(reef_area_5km) + 
+reef_entropy_drivers_model <- stan_glmer((FD_q1 +1)  ~ scale(Axis.1) + scale(Axis.2) + scale(reef_area_5km) + 
                                        scale(fishing_events) + scale(log(total_gravity_pop)) + 
                                        (1 | geographic/Site), data=reef_models,
                              family=Gamma(link="log"),chains=4, iter=2000)
-reef_hill_drivers <- as.matrix(reef_hill_drivers_model)
-reef_hill_drivers <- (reef_hill_drivers[,2:6]) 
-mcmc_intervals(reef_hill_drivers, point_est = "median", prob = 0.5, prob_outer = 0.95,
+reef_entropy_drivers <- as.matrix(reef_entropy_drivers_model)
+reef_entropy_drivers <- (reef_entropy_drivers[,2:6]) 
+mcmc_intervals(reef_entropy_drivers, point_est = "median", prob = 0.5, prob_outer = 0.95,
                outer_size = 1,
                inner_size = 4,
                point_size = 6) + geom_vline(xintercept = 0)
-ppc_dens_overlay(reef_hill_drivers_model$data$FD_q1+1, posterior_predict(reef_hill_drivers_model,draws=100)[1:100,])
+ppc_dens_overlay(reef_entropy_drivers_model$data$FD_q1+1, posterior_predict(reef_entropy_drivers_model,draws=100)[1:100,])
 
 ############
 # EVENNESS #
@@ -1285,7 +1280,7 @@ r2_bayes(reef_feve_drivers_model)
 test <- aggregate(reef_models[,c(34:ncol(reef_models))], by=list(reef_models$geographic), FUN=mean,na.rm=TRUE)
 colnames(test)[1] <- "geographic"
 
-reef_intercepts <- data.frame(PC1_centroid_reefs, reef_hill, reef_feve)
+reef_intercepts <- data.frame(PC1_centroid_reefs, reef_entropy, reef_feve)
 reef_intercepts$geographic <- rownames(reef_intercepts)
 
 reef_intercepts <- merge(reef_intercepts, test, by="geographic")
@@ -1332,22 +1327,22 @@ plot(colMeans(yrep), y)
 r2_bayes(landings_PC1_drivers_model)
 
 ##################
-# HILL DIVERSITY #
+# entropy DIVERSITY #
 ##################
 
-landings_hill_drivers_model <- stan_glmer((FD_q1+1) ~ scale(reef_hill+1) + scale(fishing_events) + 
+landings_entropy_drivers_model <- stan_glmer((FD_q1+1) ~ scale(reef_entropy+1) + scale(fishing_events) + 
                                             scale(wave_energy) + scale(dist_market) +
                                             as.factor(moon_phase) + scale(wind) +
                                             as.factor(gear) + scale(num_fishers_lines) + 
                                             (1 | geographic) + (1 | Fisher.Name),
                                        family=Gamma(link="log"), data=landings_drivers, chains=4, iter=2000)
-landings_hill_drivers <- as.matrix(landings_hill_drivers_model)
-landings_hill_drivers <- (landings_hill_drivers[,2:10])
-mcmc_intervals(landings_hill_drivers, point_est = "median", prob = 0.5, prob_outer = 0.95,
+landings_entropy_drivers <- as.matrix(landings_entropy_drivers_model)
+landings_entropy_drivers <- (landings_entropy_drivers[,2:10])
+mcmc_intervals(landings_entropy_drivers, point_est = "median", prob = 0.5, prob_outer = 0.95,
                outer_size = 1,
                inner_size = 4,
                point_size = 6) + geom_vline(xintercept = 0)
-model_data <- landings_drivers[,c("FD_q1","reef_hill","fishing_events",
+model_data <- landings_drivers[,c("FD_q1","reef_entropy","fishing_events",
                                   "wave_energy","dist_market","moon_phase","wind",
                                   "gear","num_fishers_lines","geographic","Fisher.Name")]
 model_data <- na.omit(model_data)
@@ -1381,35 +1376,35 @@ r2_bayes(landings_feve_drivers_model)
 ## INTERACTIONS AMONG DIVERSITY METRICS ##
 ##########################################
 
-reef_intx_data <- data.frame(PC1=reef_FD$FIde_PC1, rao=reef_FD$reef_rao, hill=reef_FD$FD_q1,
+reef_intx_data <- data.frame(PC1=reef_FD$FIde_PC1, rao=reef_FD$reef_rao, entropy=reef_FD$FD_q1,
                              FEve = reef_FD$FEve, pref=reef_FD$reef_deviation,
                              geographic=reef_meta$geographic,
                              source=rep("reef"))
-market_intx_data <- data.frame(PC1 = market_FD$FIde_PC1, rao=market_FD$market_rao,hill=market_FD$FD_q1,
+market_intx_data <- data.frame(PC1 = market_FD$FIde_PC1, rao=market_FD$market_rao,entropy=market_FD$FD_q1,
                                FEve =market_FD$FEve,pref=market_FD$market_deviation,
                                geographic=market_meta$geographic,
                                source=rep("market"))
 
 intx_data <- rbind(reef_intx_data, market_intx_data)
 
-# HILL & PC1
-hill_PC1_model <- brm((hill+1) ~ PC1:source + (1 | geographic),
+# entropy & PC1
+entropy_PC1_model <- brm((entropy+1) ~ PC1:source + (1 | geographic),
                       family=Gamma(link="log"), data=intx_data)
-marginal_effects(hill_PC1_model)
+marginal_effects(entropy_PC1_model)
 mean(PC1_centroid_reefs)
 mean(PC1_centroid_landings)
-mean(reef_hill)
-mean(landings_hill)
+mean(reef_entropy)
+mean(landings_entropy)
 
 # FEVE & PC1
 FEve_PC1_model <- brm((FEve) ~ PC1:source + (1 | geographic),
                       family=Beta(link = "logit", link_phi = "log"), data=intx_data)
 marginal_effects(FEve_PC1_model)
 
-# HILL $ FEVE
-hill_feve_model <- brm((hill+1) ~ FEve:source + (1 | geographic),
+# entropy $ FEVE
+entropy_feve_model <- brm((entropy+1) ~ FEve:source + (1 | geographic),
                        family=Gamma(link="log"), data=intx_data)
-marginal_effects(hill_feve_model)
+marginal_effects(entropy_feve_model)
 
 
 ########################################################
