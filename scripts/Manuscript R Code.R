@@ -27,12 +27,6 @@
 #remotes::install_github("CmlMagneville/mFD")
 #devtools::install_github("ahasverus/elbow", build_vignettes = TRUE)
 
-###############################################
-## NOTE - multidimFD FUNCTION MUST BE LOADED 
-## THE CODE IS AVAILABLE IN THE
-## SCRIPTS FOLDER ON THE GITHUB REPOSITORY
-###############################################
-
 ##################################
 ## INSTALL AND LIBRARY PACKAGES ##
 ##################################
@@ -226,23 +220,37 @@ market_FD <- data.frame(market_FD, market_entropy=market_entropy)
 
 
 ########################################################################
-## PROXY FOR SPECIES DESIRABILITY AS DEVIATION FROM 1:1 CATCH PATTERN ##
+## PROXY FOR SPECIES DESIRABILITY USING THE PREDATOR PREFERENCE INDEX
+## FROM CHESSON 1978 'Measuring Preference in Selective Predation'
+## alphai = (ri/ni) * [1/sum(rj/nj)] 
+## where prey type ri or rj is the proportion in the diet and
+## ni or nj the proportion in the environment
 ########################################################################
 
-# mean_reef_biomass <- colMeans(reef_fish)
-# mean_reef_biomass <- mean_reef_biomass/sum(mean_reef_biomass)
-# sum(mean_reef_biomass)
-# hist(mean_reef_biomass)
+#mean_reef_biomass <- colMeans(reef_fish)
+#mean_reef_biomass <- log(mean_reef_biomass)
+
+mean_reef_biomass <- colMeans(reef_log)
+
+mean_reef_biomass <- mean_reef_biomass/sum(mean_reef_biomass)
+sum(mean_reef_biomass)
+hist(mean_reef_biomass)
 # hist(log(mean_reef_biomass))
 # mean_reef_biomass <- log(mean_reef_biomass)
-# 
-# mean_market_biomass <- colMeans(market_fish)
-# mean_market_biomass <- mean_market_biomass/sum(mean_market_biomass)
-# hist(mean_market_biomass)
+ 
+#mean_market_biomass <- colMeans(market_fish)
+#mean_market_biomass <- log(mean_market_biomass)
+
+mean_market_biomass <- colMeans(market_log)
+
+mean_market_biomass <- mean_market_biomass/sum(mean_market_biomass)
+hist(mean_market_biomass)
+sum(mean_market_biomass)
+
 # hist(log(mean_market_biomass))
 # mean_market_biomass <- log(mean_market_biomass)
-# 
-# # ADD CONSTANT TO MAKE VALUES POSITIVE 
+
+# ADD CONSTANT TO MAKE VALUES POSITIVE
 # constant <- ceiling(abs(min(c(mean_reef_biomass, mean_market_biomass))))
 # 
 # mean_reef_biomass <- mean_reef_biomass + constant
@@ -264,11 +272,13 @@ market_FD <- data.frame(market_FD, market_entropy=market_entropy)
 #        col=1,bg=ifelse(deviation$deviation>0,"red","green"))
 # legend("topleft", legend=c("Over-targeted","Under-targeted"),
 #        pch=19,col=c("red","green"))
-#
-#alpha_index <- data.frame(alpha = (mean_market_biomass / mean_reef_biomass)/sum(mean_market_biomass / mean_reef_biomass))
-#rownames(alpha_index) <- rownames(traits)
-#
-#plot(deviation$deviation, alpha_index$alpha)
+
+
+alpha_index <- data.frame(alpha = (mean_market_biomass / mean_reef_biomass)/sum(mean_market_biomass / mean_reef_biomass))
+#alpha_index <- data.frame(alpha = (mean_market_biomass / mean_reef_biomass)*(1/sum(mean_market_biomass / mean_reef_biomass)) )
+rownames(alpha_index) <- rownames(traits)
+hist(alpha_index$alpha)
+
 
 #####################################################
 ## CALCULATE MEAN DEVIATION FOR REEFS AND LANDINGS ##

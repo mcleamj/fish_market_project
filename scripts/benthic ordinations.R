@@ -97,9 +97,9 @@ kos_sites <- read.csv("data/KOS_spatial_biomass.csv")
 
 
 
-##################
-## AT SPC SCALE ##
-##################
+#######################
+## AT TRANSECT SCALE ##
+#######################
 
 ####################
 ## ALL SUBSTRATES ##
@@ -140,10 +140,20 @@ benthos <- benthos[,-which(colSums(benthos)==0)]
 
 
 
-############################
+#############################
 ##  DIRECTLY AT SITE LEVEL ##
-############################
+#############################
 
+kos_sites <- read.csv("data/KOS_spatial_biomass.csv")
+benthic_all <- read.csv("data/Benthic_ordination_all.csv")
+benthic_all$site[which(nchar(benthic_all$site)<6)] <- gsub(pattern = "KOS-", replacement ="KOS-0", benthic_all$site[which(nchar(benthic_all$site)<6)])
+benthic_meta <- benthic_all[,1:9]
+benthic_meta$geographic <- with(kos_sites,
+                                geographic[match(benthic_meta$site,
+                                                 Site)])
+benthos <- benthic_all[,10:ncol(benthic_all)]
+missing_row <- which(rowSums(benthos)==0)
+benthos <- benthos[,-which(colSums(benthos)==0)]
 benthos_site <- aggregate(benthos, by=list(benthic_meta$site), FUN = mean,na.rm=TRUE)
 site <- benthos_site$Group.1
 benthos_site$Group.1 <- NULL
