@@ -1,0 +1,18 @@
+site,dist_MPA,MPA_name,MPA_type,euc_dist_outflow,outflows_1km,outflows_2.5km,dist_reef_pass
+KOS-16,2.16,James Palsis,Channel,1.15,0,2,2.05
+KOS-17,5.98,Awane,Lagoon,0.59,1,3,4.35
+KOS-18,4.7,Awane,Lagoon,2.05,0,4,2.96
+KOS-06,3.96,Awane,Lagoon,0.57,1,4,2.21
+KOS-10,0.88,Malem,Outer Reef,0.33,2,3,5.6
+KOS-23,4.06,UBR,Lagoon,0.87,1,4,2.53
+KOS-01,2.65,UBR,Lagoon,1.27,0,5,1.22
+KOS-19,2.49,UBR,Lagoon,0.72,2,6,1.65
+KOS-02,4.74,UBR,Lagoon,0.77,1,3,3.88
+KOS-03,0.56,Walung MPA,Lagoon,0.56,1,3,0.36
+KOS-04,1.46,Walung MPA,Lagoon,1.00,1,3,1.21
+KOS-25,1.69,Walung MPA,Lagoon,1.18,0,2,3.32
+KOS-05,5.03,Walung MPA,Lagoon,0.84,2,5,0.31
+KOS-11,1.69,Tafunsak MPA,Channel,2.03,0,3,0.67
+KOS-09,1.93,Tafunsak MPA,Channel,2.03,0,2,0.93
+KOS-07,2.28,Tafunsak MPA,Channel,2.08,0,2,1.3
+KOS-08,2.67,Tafunsak MPA,Channel,2.08,0,1,1.86
