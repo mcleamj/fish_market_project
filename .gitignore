@@ -37,3 +37,9 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+#Big files
+
+/data/BIG_FILES/
+/outputs/BIG_FILES/
+

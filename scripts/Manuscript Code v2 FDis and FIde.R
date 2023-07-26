@@ -407,6 +407,7 @@ yrep <- posterior_predict(reef_PC1_model, draws=100)
 ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Reef Functional Identity (PC1)"), 
            ppc_stat(y, yrep, stat="mean"),
            ncol=2, nrow=1)
+
 performance::check_model(reef_PC1_model)
 
 #################
@@ -1287,7 +1288,7 @@ reef_PC1_drivers_model <- brm(log(fide_PC1+3) ~
                               c(set_prior(class="Intercept", "normal(0,1)"),
                                 set_prior(class="b", "normal(0,1)")),
                               data=reef_drivers,
-                              family=gaussian, chains=4, iter=2000,
+                              family=gaussian, chains=4, iter=3000,
                               control = list(adapt_delta=0.95))
 
 reef_PC1_drivers <- data.frame(as.matrix(reef_PC1_drivers_model))
@@ -1326,7 +1327,7 @@ reef_dispersion_drivers_model <- brm((fdis +1)  ~
                                   c(set_prior(class="Intercept", "normal(0,1)"),
                                     set_prior(class="b", "normal(0,1)")),
                                   data=reef_drivers,
-                                  family=Gamma(link="log"),chains=4, iter=2000,
+                                  family=Gamma(link="log"),chains=4, iter=3000,
                                   control = list(adapt_delta=0.95))
 
 summary(reef_dispersion_drivers_model, prob=0.90)
