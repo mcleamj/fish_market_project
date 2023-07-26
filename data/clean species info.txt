@@ -42,6 +42,7 @@
 "73" "Monotaxis grandoculis" "Large-bodied emperor" "benthic_inverts" "secondary" "Lethrinidae" "Invertivore"
 "75" "Mulloidichthys vanicolensis" "Goatfish" "benthic_inverts" "secondary" "Mullidae" "Invertivore"
 "76" "Myripristis adusta" "Squirl-Cardinal-Soldier" "benthic_inverts" "secondary" "Holocentridae" "Planktivore"
+"79" "Myripristis sp" "Squirl-Cardinal-Soldier" "benthic_inverts" "secondary" "Holocentridae" "Planktivore"
 "83" "Naso lituratus" "Naso lituratus" "herbivore/detritivore" "herb" "Acanthuridae" "Grazer"
 "84" "Naso unicornis" "Naso unicornis" "herbivore/detritivore" "herb" "Acanthuridae" "Grazer"
 "85" "Naso vlamingii" "Naso other" "planktivores" "plank" "Acanthuridae" "Omnivore"

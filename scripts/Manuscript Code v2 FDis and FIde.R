@@ -73,12 +73,10 @@ z_score_2sd <- function(x){ (x - mean(x,na.rm=T)) / (2*sd(x,na.rm=T))}
 FSM <- readRDS("data/gadm36_FSM_0_sp.rds")
 proj4string(FSM)
 
-kos_shoreline <- raster::shapefile(file.path("data/1-01_Shoreline_and_base_layer", 
-                                             "kos_shoreline"))
+kos_shoreline <- raster::shapefile("data/1-01_Shoreline_and_base_layer/kos_shoreline.shp")
 kos_shoreline <- spTransform(kos_shoreline, FSM@proj4string)
 
-kos_reefs <- raster::shapefile(file.path("data/2-01_Reef_base_layer", 
-                                         "kos_coral_reefs"))
+kos_reefs <- raster::shapefile("data/2-01_Reef_base_layer/kos_coral_reefs.shp")
 kos_reefs <- spTransform(kos_reefs, FSM@proj4string)
 
 kos_merged <- raster::union(kos_shoreline, kos_reefs)
@@ -167,80 +165,35 @@ vectors_3_4 <- envfit(trait_space$x[,3:4], traits)
 ## REEFS ##
 ###########
 
-reef_fide <- alpha.fd.multidim(
+reef_FD <- alpha.fd.multidim(
   as.matrix(axes),
   reef_log,
-  ind_vect = c("fide"),
+  ind_vect = c("fide","fdis"),
   scaling = TRUE,
   check_input = TRUE,
   details_returned = TRUE,
   verbose = TRUE
 )
 
-reef_fide <- reef_fide$functional_diversity_indices
-reef_fide$com <- rownames(reef_fide)
-
-reef_feve <- alpha.fd.multidim(
-  as.matrix(axes),
-  reef_log[-which(reef_fide$sp_richn<3),],
-  ind_vect = c("feve"),
-  scaling = TRUE,
-  check_input = TRUE,
-  details_returned = TRUE,
-  verbose = TRUE
-)
-
-reef_feve <- reef_feve$functional_diversity_indices
-reef_feve$com <- rownames(reef_feve)
-
-reef_FD <- reef_fide
-reef_FD$feve <- with(reef_feve, feve[match(reef_FD$com, com)])
-
-sp_dist <- as.matrix(vegdist(scale(traits), method = "euclidean"))
-
-reef_entropy <- alpha.fd.hill(reef_log, sp_dist, tau="mean", q=1)
-reef_entropy <- reef_entropy$asb_FD_Hill
-
-reef_FD <- data.frame(reef_FD, reef_entropy = reef_entropy)
+reef_FD <- reef_FD$functional_diversity_indices
+reef_FD$com <- rownames(reef_FD)
 
 ##############
 ## LANDINGS ##
 ##############
 
-market_fide <- alpha.fd.multidim(
+market_FD <- alpha.fd.multidim(
   as.matrix(axes),
   market_log,
-  ind_vect = c("fide"),
+  ind_vect = c("fide", "fdis"),
   scaling = TRUE,
   check_input = TRUE,
   details_returned = TRUE,
   verbose = TRUE
 )
 
-market_fide <- market_fide$functional_diversity_indices
-market_fide$com <- rownames(market_fide)
-
-market_feve <- alpha.fd.multidim(
-  as.matrix(axes),
-  market_log[-which(market_fide$sp_richn<3),],
-  ind_vect = c("feve"),
-  scaling = TRUE,
-  check_input = TRUE,
-  details_returned = TRUE,
-  verbose = TRUE
-)
-
-market_feve <- market_feve$functional_diversity_indices
-market_feve$com <- rownames(market_feve)
-
-market_FD <- market_fide
-market_FD$feve <- with(market_feve, feve[match(market_FD$com, com)])
-
-market_entropy <- alpha.fd.hill(market_log, sp_dist, tau="mean", q=1)
-market_entropy <- market_entropy$asb_FD_Hill
-
-market_FD <- data.frame(market_FD, market_entropy=market_entropy)
-
+market_FD <- market_FD$functional_diversity_indices
+market_FD$com <- rownames(market_FD)
 
 ########################################################################
 ## PROXY FOR SPECIES DESIRABILITY USING THE PREDATOR PREFERENCE INDEX
@@ -296,9 +249,14 @@ legend("topright", legend=c("Reefs","Landings"),
 ## SPECIES VULNERABILITY TO FISHING ##
 ######################################
 
-vuln <- data.frame(Species=colnames(reef_fish),
-                   Vulnerability= species(species_info$species, fields = "Vulnerability"))
-rownames(vuln) <- rownames(traits)
+# NOTE - Carangoides orthogrammus was just changed to Ferdauia orthogrammus 
+vuln <- species(species_info$species, fields = c("Species", "Vulnerability"))
+vuln <- vuln %>% dplyr::rename(species = Species)
+vuln <- merge(species_info[,c("species","family")], vuln, by="species",
+              all=TRUE)
+vuln$Vulnerability[vuln$species=="Carangoides orthogrammus"] <- species("Ferdauia orthogrammus", fields="Vulnerability")$Vulnerability
+rownames(vuln) <- vuln$species
+vuln$family <- NULL
 
 #################################################################
 ## FILL MYRPRISTIS SP. WITH MEAN OF OBSERVED SPECIES IN GENERA ##
@@ -307,7 +265,8 @@ rownames(vuln) <- rownames(traits)
 myripristis_vuln <- species(c("Myripristis adusta","Myripristis berndti","Myripristis murdjan"),
                             fields="Vulnerability")
 
-vuln$Vulnerability[vuln$Species=="Myripristis.sp"] <- mean(myripristis_vuln$Vulnerability)
+vuln$Vulnerability[vuln$species=="Myripristis sp"] <- mean(myripristis_vuln$Vulnerability)
+sum(is.na(vuln$Vulnerability))
 
 ################################
 ## FUNCTIONAL DISTINCTIVENESS ##
@@ -433,7 +392,7 @@ reef_models$reef_proportion_vuln <- (reef_models$reef_proportion_vuln*(nrow(reef
 reef_PC1_model <- brm(log(fide_PC1+3) ~ (1 | geographic/site/site_year), 
                       set_prior(class="Intercept", "normal(0,1)"),
                       data=reef_models,
-                       family=gaussian, chains=4, iter=2000)
+                      family=gaussian, chains=4, iter=2000)
 
 reef_PC1_draws <- data.frame(as.matrix(reef_PC1_model))
 reef_PC1 <- reef_PC1_draws %>%
@@ -448,7 +407,7 @@ yrep <- posterior_predict(reef_PC1_model, draws=100)
 ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Reef Functional Identity (PC1)"), 
            ppc_stat(y, yrep, stat="mean"),
            ncol=2, nrow=1)
-  
+performance::check_model(reef_PC1_model)
 
 #################
 # PC 2 CENTROID #
@@ -457,7 +416,7 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Reef Functional Identity (PC1)")
 reef_PC2_model <- brm(fide_PC2 ~ (1 | geographic/site/site_year), 
                       set_prior(class="Intercept", "normal(0,1)"),
                       data=reef_models,
-                             family=gaussian, chains=4, iter=2000)
+                      family=gaussian, chains=4, iter=2000)
 
 reef_PC2_draws <- data.frame(as.matrix(reef_PC2_model))
 reef_PC2 <- reef_PC2_draws %>%
@@ -474,53 +433,28 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Reef Functional Identity (PC2)")
            ncol=2, nrow=1)
 
 
-######################
-# FUNCTIONAL ENTROPY #
-######################
+#########################
+# FUNCTIONAL DISPERSION #
+#########################
 
-reef_entropy_model <- brm((FD_q1+1) ~ (1 | geographic/site/site_year), 
+reef_dispersion_model <- brm((fdis+1) ~ (1 | geographic/site/site_year), 
                           set_prior(class="Intercept", "normal(0,1)"),
                           data=reef_models,
-                             family=Gamma(link="log"),chains=4, iter=2000)
+                          family=Gamma(link="log"),chains=4, iter=2000)
 
-reef_entropy_draws <- data.frame(as.matrix(reef_entropy_model))
-reef_entropy <- reef_entropy_draws %>%
+reef_dispersion_draws <- data.frame(as.matrix(reef_dispersion_model))
+reef_dispersion <- reef_dispersion_draws %>%
   dplyr::select("r_geographic.East.Intercept.":"r_geographic.West.Intercept.")
-reef_entropy <- (exp(reef_entropy + reef_entropy_draws$b_Intercept)) - 1
-colnames(reef_entropy) <- geo_coords$geographic
-reef_entropy <- apply(reef_entropy, 2, median)
-plot(reef_raw_avg$FD_q1, reef_entropy,pch=19)
+reef_dispersion <- (exp(reef_dispersion + reef_dispersion_draws$b_Intercept)) - 1
+colnames(reef_dispersion) <- geo_coords$geographic
+reef_dispersion <- apply(reef_dispersion, 2, median)
+plot(reef_raw_avg$fdis, reef_dispersion,pch=19)
 
-y <- reef_models$FD_q1+1
-yrep <- posterior_predict(reef_entropy_model, draws=100)
+y <- reef_models$fdis+1
+yrep <- posterior_predict(reef_dispersion_model, draws=100)
 ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Reef Functional Entropy"), 
            ppc_stat(y, yrep, stat="mean"),
            ncol=2, nrow=1)
-
-############
-# EVENNESS #
-############
-
-reef_feve_model <- brm(feve ~ (1 | geographic/site/site_year), 
-                       set_prior(class="Intercept", "normal(0,1)"),
-                       data=reef_models,
-                       family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000)
-
-reef_feve_draws <- data.frame(as.matrix(reef_feve_model))
-reef_feve <- reef_feve_draws %>%
-  dplyr::select("r_geographic.East.Intercept.":"r_geographic.West.Intercept.")
-reef_feve <- inv_logit_scaled(reef_feve + reef_feve_draws$b_Intercept)
-colnames(reef_feve) <- geo_coords$geographic
-reef_feve <- apply(reef_feve, 2, median)
-plot(reef_raw_avg$feve, reef_feve,pch=19)
-
-model_data <- na.omit(reef_models[,c("feve","geographic","site")])
-y <- model_data$feve
-yrep <- posterior_predict(reef_feve_model, draws=100)
-ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Reef Functional Evenness"), 
-           ppc_stat(y, yrep, stat="mean"),
-           ncol=2, nrow=1)
-
 
 #######################
 # PROPORTION DISTINCT #
@@ -529,7 +463,7 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Reef Functional Evenness"),
 reef_di_model <- brm(reef_proportion_di ~ (1 | geographic/site/site_year), 
                      set_prior(class="Intercept", "normal(0,1)"),
                      data=reef_models,
-                       family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000)
+                     family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000)
 
 reef_di_draws <- data.frame(as.matrix(reef_di_model))
 reef_di <- reef_di_draws %>%
@@ -553,7 +487,7 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Reef Proportion Distinct"),
 reef_vuln_model <- brm(reef_proportion_vuln ~ (1 | geographic/site/site_year), 
                        set_prior(class="Intercept", "normal(0,1)"),
                        data=reef_models,
-                     family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000)
+                       family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000)
 
 reef_vuln_draws <- data.frame(as.matrix(reef_vuln_model))
 reef_vuln <- reef_vuln_draws %>%
@@ -616,7 +550,7 @@ reef_troph <- cbind(apply(reef_grazer,2,median), apply(reef_microphage,2,median)
                     apply(reef_planktivore,2,median),  apply(reef_omnivore,2,median),
                     apply(reef_invertivore,2,median),apply(reef_piscivore,2,median))
 colnames(reef_troph) <- c("1_grazer", "2_microphage", "3_planktivore",
-                                                      "4_omnivore", "5_invertivore", "6_piscivore")
+                          "4_omnivore", "5_invertivore", "6_piscivore")
 rowSums(reef_troph)
 
 
@@ -626,8 +560,7 @@ rowSums(reef_troph)
 
 tab_model(reef_PC1_model,show.ci=0.90, title="Reef Functional Identity PC1")
 tab_model(reef_PC2_model,show.ci=0.90, title="Reef Functional Identity PC2")
-tab_model(reef_entropy_model,show.ci=0.90, title="Reef Functional Entropy")
-tab_model(reef_feve_model,show.ci=0.90, title="Reef Functional Evenness")
+tab_model(reef_dispersion_model,show.ci=0.90, title="Reef Functional Entropy")
 tab_model(reef_di_model,show.ci=0.90, title="Reef Functional Distinctiveness")
 tab_model(reef_vuln_model,show.ci=0.90, title="Reef Fishing Vulnerability")
 tab_model(reef_troph_model, show.ci=0.90, title="Reef Trophic Guilds")
@@ -650,9 +583,9 @@ landings_models$market_proportion_vuln <- (landings_models$market_proportion_vul
 #################
 
 landings_PC1_model <- brm(fide_PC1 ~ (1 | geographic) + (1 | Fisher.Name),
-                           set_prior(class="Intercept", "normal(0,1)"),
-                                  data=landings_models,
-                             family=gaussian, chains=4, iter=2000)
+                          set_prior(class="Intercept", "normal(0,1)"),
+                          data=landings_models,
+                          family=gaussian, chains=4, iter=2000)
 
 landings_PC1_draws <- data.frame(as.matrix(landings_PC1_model))
 landings_PC1 <- landings_PC1_draws %>%
@@ -680,8 +613,8 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Landings Functional Identity (PC
 
 landings_PC2_model <- brm(fide_PC2 ~ (1 | geographic) + (1 | Fisher.Name),
                           set_prior(class="Intercept", "normal(0,1)"),
-                                data=landings_models,
-                             family=gaussian, chains=4, iter=2000)
+                          data=landings_models,
+                          family=gaussian, chains=4, iter=2000)
 
 landings_PC2_draws <- data.frame(as.matrix(landings_PC2_model))
 landings_PC2 <- landings_PC2_draws %>%
@@ -698,52 +631,28 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Landings Functional Identity (PC
            ppc_stat(y, yrep, stat="mean"),
            ncol=2, nrow=1)
 
-######################
-# FUNCTIONAL ENTROPY #
-######################
+###########################
+# FUNCTIONAL DISEPERSION #
+###########################
 
-landings_entropy_model <- brm((FD_q1+1) ~ (1 | geographic) + (1 | Fisher.Name),
+landings_dispersion_model <- brm((fdis+1) ~ (1 | geographic) + (1 | Fisher.Name),
                               set_prior(class="Intercept", "normal(0,1)"),
-                                   data=landings_models,
-                                 family=Gamma(link="log"),chains=4, iter=2000 )
+                              data=landings_models,
+                              family=Gamma(link="log"),chains=4, iter=2000 )
 
-landings_entropy_draws <- data.frame(as.matrix(landings_entropy_model))
+landings_dispersion_draws <- data.frame(as.matrix(landings_dispersion_model))
 
-landings_entropy <- landings_entropy_draws %>%
+landings_dispersion <- landings_dispersion_draws %>%
   select(starts_with("r_geographic"))
-landings_entropy <- (exp(landings_entropy + landings_entropy_draws$b_Intercept)) - 1
-colnames(landings_entropy) <- geo_coords$geographic
-landings_entropy <- apply(landings_entropy, 2, median)
-plot(landings_raw_avg$FD_q1, landings_entropy,pch=19)
+landings_dispersion <- (exp(landings_dispersion + landings_dispersion_draws$b_Intercept)) - 1
+colnames(landings_dispersion) <- geo_coords$geographic
+landings_dispersion <- apply(landings_dispersion, 2, median)
+plot(landings_raw_avg$fdis, landings_dispersion,pch=19)
 
-model_data <- na.omit(landings_models[,c("FD_q1","geographic","Fisher.Name")])
-y <- model_data$FD_q1+1
-yrep <- posterior_predict(landings_entropy_model, draws=100)
+model_data <- na.omit(landings_models[,c("fdis","geographic","Fisher.Name")])
+y <- model_data$fdis+1
+yrep <- posterior_predict(landings_dispersion_model, draws=100)
 ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Landings Functional Entropy"), 
-           ppc_stat(y, yrep, stat="mean"),
-           ncol=2, nrow=1)
-
-############
-# EVENNESS #
-############
-
-landings_feve_model <- brm(feve ~ (1 | geographic) + (1 | Fisher.Name),
-                           set_prior(class="Intercept", "normal(0,1)"),
-                             data=landings_models,
-                           family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000 )
-
-landings_feve_draws <- data.frame(as.matrix(landings_feve_model))
-landings_feve <- landings_feve_draws %>%
-  select(starts_with("r_geographic"))
-landings_feve <- inv_logit_scaled(landings_feve + landings_feve_draws$b_Intercept)
-colnames(landings_feve) <- geo_coords$geographic
-landings_feve <- apply(landings_feve, 2, median)
-plot(landings_raw_avg$feve, landings_feve, pch=19)
-
-model_data <- na.omit(landings_models[,c("feve","geographic","Fisher.Name")])
-y <- model_data$feve
-yrep <- posterior_predict(landings_feve_model, draws=100)
-ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Landings Functional Evenness"), 
            ppc_stat(y, yrep, stat="mean"),
            ncol=2, nrow=1)
 
@@ -754,7 +663,7 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Landings Functional Evenness"),
 landings_di_model <- brm(market_proportion_di~ (1 | geographic) + (1 | Fisher.Name), 
                          set_prior(class="Intercept", "normal(0,1)"),
                          data=landings_models,
-                           family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000 )
+                         family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000 )
 landings_di_draws <- data.frame(as.matrix(landings_di_model))
 
 landings_di <- landings_di_draws %>%
@@ -778,7 +687,7 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Landings Proportion Distinct"),
 landings_vuln_model <- brm(market_proportion_vuln ~ (1 | geographic) + (1 | Fisher.Name),
                            set_prior(class="Intercept", "normal(0,1)"),
                            data=landings_models,
-                         family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000 )
+                           family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000 )
 
 landings_vuln_draws <- data.frame(as.matrix(landings_vuln_model))
 landings_vuln <- landings_vuln_draws %>%
@@ -800,10 +709,10 @@ ggarrange( ppc_dens_overlay(y, yrep) + ggtitle("Landings Proportion Vulnerable")
 #############################
 
 landings_troph_model  <- brm(mvbind(grazer, invertivore, microphage,
-                                  omnivore, piscivore, planktivore) ~ (1 | geographic) + (1 | Fisher.Name),
+                                    omnivore, piscivore, planktivore) ~ (1 | geographic) + (1 | Fisher.Name),
                              set_prior(class="Intercept", "normal(0,1)"),
-                           data=landings_models,
-                           family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000 )
+                             data=landings_models,
+                             family=Beta(link = "logit", link_phi = "log"),chains=4, iter=2000 )
 
 landings_troph_draws <- data.frame(as.matrix(landings_troph_model))
 
@@ -845,7 +754,7 @@ landings_troph <- cbind(apply(landings_grazer,2,median), apply(landings_micropha
                         apply(landings_planktivore,2,median), apply(landings_omnivore,2,median), 
                         apply(landings_invertivore,2,median), apply(landings_piscivore,2,median))
 colnames(landings_troph) <- c("1_grazer", "2_microphage", "3_planktivore",
-                               "4_omnivore", "5_invertivore", "6_piscivore")
+                              "4_omnivore", "5_invertivore", "6_piscivore")
 rowSums(landings_troph)
 
 troph_test <- as.data.frame(landings_troph - reef_troph)
@@ -858,8 +767,7 @@ troph_test$geographic <- rep(landings_raw_avg$geographic)
 
 tab_model(landings_PC1_model,show.ci=0.90, title="Landings Functional Identity PC1")
 tab_model(landings_PC2_model,show.ci=0.90, title="Landings Functional Identity PC2")
-tab_model(landings_entropy_model,show.ci=0.90, title="Landings Functional Entropy")
-tab_model(landings_feve_model,show.ci=0.90, title="Landings Functional Evenness")
+tab_model(landings_dispersion_model,show.ci=0.90, title="Landings Functional Entropy")
 tab_model(landings_di_model,show.ci=0.90, title="Landings Functional Distinctiveness")
 tab_model(landings_vuln_model,show.ci=0.90, title="Landings Fishing Vulnerability")
 tab_model(landings_troph_model, show.ci=0.90, title="Landings Trophic Guilds")
@@ -1043,22 +951,91 @@ mtext("D", font=2, cex=1.5, adj=-0.1, line=0.5)
 ## MAP FUNCTIONAL DIVERSITY ##---------------------------------------------------------------------------------------------------------
 ##############################
 
-######################
-# FUNCTIONAL ENTROPY #
-######################
+
+################################
+# FUNCTIONAL IDENTITY/CENTROID #
+################################
 
 graphics.off()
 par(mfrow=c(1,2))
 
 ## REEF 
-map_color <- variablecol(reef_entropy, col=brewer.oranges(length(reef_entropy)),
-                         clim=range(c(reef_entropy, landings_entropy)))
+map_color <- variablecol(PC1_centroid_reefs, col=brewer.blues(length(PC1_centroid_reefs)),
+                         clim=range(c(PC1_centroid_reefs, PC1_centroid_landings)))
 scatter2D(geo_coords$Lon, geo_coords$Lat, 
-          pch=19, colvar = reef_entropy,
+          pch=19, colvar = PC1_centroid_reefs,
           colkey = TRUE, cex=0,xlab=NA,ylab=NA,
           xlim=c(162.89,163.045),ylim=c(5.25,5.383),
-          col = brewer.oranges(length(reef_entropy)),
-          clim=range(c(reef_entropy, landings_entropy)))
+          col = brewer.blues(length(PC1_centroid_reefs)),
+          clim=range(c(PC1_centroid_reefs, PC1_centroid_landings)))
+rect(par("usr")[1],par("usr")[3],par("usr")[2],par("usr")[4],col = adjustcolor("lightblue",alpha=0.5))
+mtext(side=4,line=1,"PC1 Centroid")
+plot(kos_shoreline, xlim=range(reef_data$Lon),
+     ylim=range(reef_data$Lat), col="grey",add=TRUE)
+plot(kos_reefs, xlim=range(reef_data$Lon),
+     ylim=range(reef_data$Lat), col="grey90",add=TRUE)
+scatter2D(geo_coords$Lon, geo_coords$Lat, 
+          pch=21, colvar = PC1_centroid_reefs,
+          colkey = FALSE, xlab=NA,ylab=NA,
+          cex=4,
+          col = 1, bg=map_color,
+          add=TRUE)
+plot(kos_buffer, add=TRUE)
+title("Reef Observations")
+mtext("(a)",line=1,font=2,adj=-0.1,cex=1.75)
+
+
+## LANDINGS
+map_color <- variablecol(PC1_centroid_landings, col=brewer.blues(length(PC1_centroid_landings)),
+                         clim=range(c(PC1_centroid_reefs, PC1_centroid_landings)))
+scatter2D(geo_coords$Lon, geo_coords$Lat, 
+          pch=19, colvar = PC1_centroid_landings,
+          colkey = TRUE, cex=0,xlab=NA,ylab=NA,
+          xlim=c(162.89,163.045),ylim=c(5.25,5.383),
+          col = brewer.blues(length(PC1_centroid_landings)),
+          clim=range(c(PC1_centroid_reefs, PC1_centroid_landings)))
+rect(par("usr")[1],par("usr")[3],par("usr")[2],par("usr")[4],col = adjustcolor("lightblue",alpha=0.5))
+mtext(side=4,line=1,"PC1 Centroid")
+plot(kos_shoreline, xlim=range(reef_data$Lon),
+     ylim=range(reef_data$Lat), col="grey",add=TRUE)
+plot(kos_reefs, xlim=range(reef_data$Lon),
+     ylim=range(reef_data$Lat), col="grey90",add=TRUE)
+scatter2D(geo_coords$Lon, geo_coords$Lat, 
+          pch=21, colvar = PC1_centroid_landings,
+          add=TRUE,colkey = FALSE, xlab=NA,ylab=NA,
+          cex=4,
+          col = 1, bg=map_color)
+plot(kos_buffer, add=TRUE)
+title("Fisheries Landings")
+mtext("(a)",line=1,font=2,adj=-0.1,cex=1.75)
+
+
+## DIFFERNECE BARPLOT
+di_diff <- data.frame(geographic = names(PC1_centroid_landings),
+                      diff = PC1_centroid_reefs - PC1_centroid_landings)
+di_diff$sign <- ifelse(di_diff$diff < 0, "negative","positive")
+
+ggplot(di_diff,aes(geographic,diff)) +
+  geom_bar(stat="identity",position="identity",aes(fill = sign))+
+  scale_fill_manual(values=c(negative="red",positive="green"))
+
+
+#########################
+# FUNCTIONAL DISPERSION #
+#########################
+
+graphics.off()
+par(mfrow=c(1,2))
+
+## REEF 
+map_color <- variablecol(reef_dispersion, col=brewer.oranges(length(reef_dispersion)),
+                         clim=range(c(reef_dispersion, landings_dispersion)))
+scatter2D(geo_coords$Lon, geo_coords$Lat, 
+          pch=19, colvar = reef_dispersion,
+          colkey = TRUE, cex=0,xlab=NA,ylab=NA,
+          xlim=c(162.89,163.045),ylim=c(5.25,5.383),
+          col = brewer.oranges(length(reef_dispersion)),
+          clim=range(c(reef_dispersion, landings_dispersion)))
 rect(par("usr")[1],par("usr")[3],par("usr")[2],par("usr")[4],col = adjustcolor("lightblue",alpha=0.5))
 mtext(side=4,line=1,"Functional Entropy")
 plot(kos_shoreline, xlim=range(reef_data$Lon),
@@ -1066,9 +1043,9 @@ plot(kos_shoreline, xlim=range(reef_data$Lon),
 plot(kos_reefs, xlim=range(reef_data$Lon),
      ylim=range(reef_data$Lat), col="grey90",add=TRUE)
 scatter2D(geo_coords$Lon, geo_coords$Lat, 
-          pch=21, colvar = reef_entropy,
+          pch=21, colvar = reef_dispersion,
           add=TRUE,colkey = FALSE, xlab=NA,ylab=NA,
-          cex=(reef_entropy/max(c(reef_entropy,landings_entropy)))*4,
+          cex=(reef_dispersion/max(c(reef_dispersion,landings_dispersion)))*4,
           #cex=4,
           col = 1, bg=map_color)
 plot(kos_buffer, add=TRUE)
@@ -1077,14 +1054,14 @@ mtext("(a)",line=1,font=2,adj=-0.1,cex=1.75)
 
 
 ## LANDINGS
-map_color <- variablecol(landings_entropy, col=brewer.oranges(length(landings_entropy)),
-                         clim=range(c(reef_entropy, landings_entropy)))
+map_color <- variablecol(landings_dispersion, col=brewer.oranges(length(landings_dispersion)),
+                         clim=range(c(reef_dispersion, landings_dispersion)))
 scatter2D(geo_coords$Lon, geo_coords$Lat, 
-          pch=19, colvar = landings_entropy,
+          pch=19, colvar = landings_dispersion,
           colkey = TRUE, cex=0,xlab=NA,ylab=NA,
           xlim=c(162.89,163.045),ylim=c(5.25,5.383),
-          col = brewer.oranges(length(landings_entropy)),
-          clim=range(c(reef_entropy, landings_entropy)))
+          col = brewer.oranges(length(landings_dispersion)),
+          clim=range(c(reef_dispersion, landings_dispersion)))
 rect(par("usr")[1],par("usr")[3],par("usr")[2],par("usr")[4],col = adjustcolor("lightblue",alpha=0.5))
 mtext(side=4,line=1,"Functional Entropy")
 plot(kos_shoreline, xlim=range(reef_data$Lon),
@@ -1092,9 +1069,9 @@ plot(kos_shoreline, xlim=range(reef_data$Lon),
 plot(kos_reefs, xlim=range(reef_data$Lon),
      ylim=range(reef_data$Lat), col="grey90",add=TRUE)
 scatter2D(geo_coords$Lon, geo_coords$Lat, 
-          pch=21, colvar = landings_entropy,
+          pch=21, colvar = landings_dispersion,
           add=TRUE,colkey = FALSE, xlab=NA,ylab=NA,
-          cex=(landings_entropy/max(c(reef_entropy,landings_entropy)))*4,
+          cex=(landings_dispersion/max(c(reef_dispersion,landings_dispersion)))*4,
           #cex=4,
           col = 1, bg=map_color)
 plot(kos_buffer, add=TRUE)
@@ -1104,77 +1081,8 @@ mtext("(b)",line=1,font=2,adj=-0.1,cex=1.75)
 
 
 ## DIFFERNECE BARPLOT
-di_diff <- data.frame(geographic = names(landings_entropy),
-                      diff = reef_entropy - landings_entropy)
-di_diff$sign <- ifelse(di_diff$diff < 0, "negative","positive")
-
-ggplot(di_diff,aes(geographic,diff)) +
-  geom_bar(stat="identity",position="identity",aes(fill = sign))+
-  scale_fill_manual(values=c(negative="red",positive="green"))
-
-
-#######################
-# FUNCTIONAL EVENNESS #
-#######################
-
-graphics.off()
-par(mfrow=c(1,2))
-
-## REEF 
-map_color <- variablecol(reef_feve, col=brewer.blues(length(reef_feve)),
-                         clim=range(c(reef_feve, landings_feve)))
-scatter2D(geo_coords$Lon, geo_coords$Lat, 
-          pch=19, colvar = reef_feve,
-          colkey = TRUE, cex=0,xlab=NA,ylab=NA,
-          xlim=c(162.89,163.045),ylim=c(5.25,5.383),
-          col = brewer.blues(length(reef_feve)),
-          clim=range(c(reef_feve, landings_feve)))
-rect(par("usr")[1],par("usr")[3],par("usr")[2],par("usr")[4],col = adjustcolor("lightblue",alpha=0.5))
-mtext(side=4,line=1,"Functional Evenness")
-plot(kos_shoreline, xlim=range(reef_data$Lon),
-     ylim=range(reef_data$Lat), col="grey",add=TRUE)
-plot(kos_reefs, xlim=range(reef_data$Lon),
-     ylim=range(reef_data$Lat), col="grey90",add=TRUE)
-scatter2D(geo_coords$Lon, geo_coords$Lat, 
-          pch=21, colvar = reef_feve,
-          add=TRUE,colkey = FALSE, xlab=NA,ylab=NA,
-          cex=(reef_feve/max(c(reef_feve,landings_feve)))*4,
-          #cex=4,
-          col = 1, bg=map_color)
-plot(kos_buffer, add=TRUE)
-title("Reef Observations")
-mtext("(a)",line=1,font=2,adj=-0.1,cex=1.75)
-
-
-## LANDINGS
-map_color <- variablecol(landings_feve, col=brewer.blues(length(landings_feve)),
-                         clim=range(c(reef_feve, landings_feve)))
-scatter2D(geo_coords$Lon, geo_coords$Lat, 
-          pch=19, colvar = landings_feve,
-          colkey = TRUE, cex=0,xlab=NA,ylab=NA,
-          xlim=c(162.89,163.045),ylim=c(5.25,5.383),
-          col = brewer.blues(length(landings_feve)),
-          clim=range(c(reef_feve, landings_feve)))
-rect(par("usr")[1],par("usr")[3],par("usr")[2],par("usr")[4],col = adjustcolor("lightblue",alpha=0.5))
-mtext(side=4,line=1,"Functional Evenness")
-plot(kos_shoreline, xlim=range(reef_data$Lon),
-     ylim=range(reef_data$Lat), col="grey",add=TRUE)
-plot(kos_reefs, xlim=range(reef_data$Lon),
-     ylim=range(reef_data$Lat), col="grey90",add=TRUE)
-scatter2D(geo_coords$Lon, geo_coords$Lat, 
-          pch=21, colvar = landings_feve,
-          add=TRUE,colkey = FALSE, xlab=NA,ylab=NA,
-          cex=(landings_feve/max(c(reef_feve,landings_feve)))*4,
-          #cex=4,
-          col = 1, bg=map_color)
-plot(kos_buffer, add=TRUE)
-title("Fisheries Landings")
-mtext("(a)",line=1,font=2,adj=-0.1,cex=1.75)
-
-
-## DIFFERNECE BARPLOT
-di_diff <- data.frame(geographic = names(landings_feve),
-                      diff = reef_feve - landings_feve)
+di_diff <- data.frame(geographic = names(landings_dispersion),
+                      diff = reef_dispersion - landings_dispersion)
 di_diff$sign <- ifelse(di_diff$diff < 0, "negative","positive")
 
 ggplot(di_diff,aes(geographic,diff)) +
@@ -1378,8 +1286,8 @@ reef_PC1_drivers_model <- brm(log(fide_PC1+3) ~
                                 (1 | geographic/site/site_year),
                               c(set_prior(class="Intercept", "normal(0,1)"),
                                 set_prior(class="b", "normal(0,1)")),
-                                       data=reef_drivers,
-                                     family=gaussian, chains=4, iter=2000,
+                              data=reef_drivers,
+                              family=gaussian, chains=4, iter=2000,
                               control = list(adapt_delta=0.95))
 
 reef_PC1_drivers <- data.frame(as.matrix(reef_PC1_drivers_model))
@@ -1394,7 +1302,7 @@ mcmc_intervals(reef_PC1_drivers, point_est = "median", prob = 0.5, prob_outer = 
                point_size = 6) + geom_vline(xintercept = 0)
 
 model_data <- reef_drivers[,c("fide_PC1","PC1_all","PC2_all","reef_area_5km","fishing_events",
-                             "tot_grav_pop","geographic","site","site_year")]
+                              "tot_grav_pop","geographic","site","site_year")]
 
 ppc_dens_overlay(log(reef_PC1_drivers_model$data$fide_PC1+3), posterior_predict(reef_PC1_drivers_model,draws=100)[1:100,])
 ppc_error_scatter_avg(log(reef_PC1_drivers_model$data$fide_PC1+3), posterior_predict(reef_PC1_drivers_model,draws=100))
@@ -1404,90 +1312,52 @@ yrep <- posterior_predict(reef_PC1_drivers_model,draws=100)
 plot(colMeans(yrep), y)
 ppc_stat(y, yrep, stat="mean")
 
-######################
-# FUNCTIONAL ENTROPY #
-######################
+#########################
+# FUNCTIONAL DISPERSION #
+#########################
 
-reef_entropy_drivers_model <- brm((FD_q1 +1)  ~ 
+reef_dispersion_drivers_model <- brm((fdis +1)  ~ 
                                     z_score_2sd(PC1_all) +
                                     z_score_2sd(PC2_all) +
                                     z_score_2sd(reef_area_5km) + 
                                     z_score_2sd(fishing_events) + 
                                     z_score_2sd(tot_grav_pop) +
-                                       (1 | geographic/site/site_year), 
+                                    (1 | geographic/site/site_year), 
                                   c(set_prior(class="Intercept", "normal(0,1)"),
                                     set_prior(class="b", "normal(0,1)")),
                                   data=reef_drivers,
-                             family=Gamma(link="log"),chains=4, iter=2000,
-                             control = list(adapt_delta=0.95))
+                                  family=Gamma(link="log"),chains=4, iter=2000,
+                                  control = list(adapt_delta=0.95))
 
-summary(reef_entropy_drivers_model, prob=0.90)
-reef_entropy_drivers <- data.frame(as.matrix(reef_entropy_drivers_model))
-reef_entropy_drivers <-  reef_entropy_drivers %>%
+summary(reef_dispersion_drivers_model, prob=0.90)
+reef_dispersion_drivers <- data.frame(as.matrix(reef_dispersion_drivers_model))
+reef_dispersion_drivers <-  reef_dispersion_drivers %>%
   dplyr::select('b_z_score_2sdtot_grav_pop', 'b_z_score_2sdfishing_events', 
                 'b_z_score_2sdreef_area_5km', 'b_z_score_2sdPC1_all', 'b_z_score_2sdPC2_all')
-mcmc_intervals(reef_entropy_drivers, point_est = "median", prob = 0.5, prob_outer = 0.90,
+mcmc_intervals(reef_dispersion_drivers, point_est = "median", prob = 0.5, prob_outer = 0.90,
                outer_size = 1,
                inner_size = 4,
                point_size = 6) + geom_vline(xintercept = 0)
 
-ppc_dens_overlay(reef_entropy_drivers_model$data$FD_q1+1, posterior_predict(reef_entropy_drivers_model,draws=100)[1:100,])
+ppc_dens_overlay(reef_dispersion_drivers_model$data$fdis+1, posterior_predict(reef_dispersion_drivers_model,draws=100)[1:100,])
 
-y <- (reef_entropy_drivers_model$data$FD_q1 + 1)
-yrep <- posterior_predict(reef_entropy_drivers_model,draws=100)
+y <- (reef_dispersion_drivers_model$data$fdis + 1)
+yrep <- posterior_predict(reef_dispersion_drivers_model,draws=100)
 plot(colMeans(yrep), y)
 ppc_stat(y, yrep, stat="mean")
-
-############
-# EVENNESS #
-############
-
-reef_feve_drivers_model <- brm(feve  ~                                     
-                                 z_score_2sd(PC1_all) +
-                                 z_score_2sd(PC2_all) +
-                                 z_score_2sd(reef_area_5km) + 
-                                 z_score_2sd(fishing_events) + 
-                                 z_score_2sd(tot_grav_pop) +
-                                 (1 | geographic/site/site_year),
-                               c(set_prior(class="Intercept", "normal(0,1)"),
-                                 set_prior(class="b", "normal(0,1)")),
-                               data=reef_drivers,
-                                      family=Beta(link = "logit", link_phi = "log"),
-                               chains=4, iter=3000,
-                               control = list(adapt_delta=0.95))
-
-reef_feve_drivers <- data.frame(as.matrix(reef_feve_drivers_model))
-reef_feve_drivers <- reef_feve_drivers %>%
-  dplyr::select('b_z_score_2sdtot_grav_pop', 'b_z_score_2sdfishing_events', 
-                'b_z_score_2sdreef_area_5km', 'b_z_score_2sdPC1_all', 'b_z_score_2sdPC2_all')
-mcmc_intervals(reef_feve_drivers, point_est = "median", prob = 0.5, prob_outer = 0.95,
-               outer_size = 1,
-               inner_size = 4,
-               point_size = 6) + geom_vline(xintercept = 0)
-
-ppc_dens_overlay(reef_feve_drivers_model$data$feve, posterior_predict(reef_feve_drivers_model,draws=100)[1:100,])
-ppc_error_scatter_avg(reef_feve_drivers_model$data$feve, posterior_predict(reef_feve_drivers_model,draws=100))
-
-y <- reef_feve_drivers_model$data$feve
-yrep <- posterior_predict(reef_feve_drivers_model,draws=100)
-plot(colMeans(yrep), y)
-ppc_stat(y, yrep, stat="mean")
-
 
 ##########################
 ## MODEL SUMMARY TABLES ##
 ##########################
 
 tab_model(reef_PC1_drivers_model, show.ci=0.90, title="Reef Functional Identity PC1 Drivers")
-tab_model(reef_entropy_drivers_model, show.ci=0.90, title="Reef Functional Identity PC1 Drivers")
-tab_model(reef_feve_drivers_model, show.ci=0.90, title="Reef Functional Identity PC1 Drivers")
-
+tab_model(reef_dispersion_drivers_model, show.ci=0.90, title="Reef Functional Identity PC1 Drivers")
 
 #####################
 ## LANDINGS MODELs ##--------------------------------------------------------------------------------
 #####################
 
-reef_intercepts <- data.frame(PC1_centroid_reefs, reef_entropy, reef_feve)
+reef_intercepts <- data.frame(PC1_centroid_reefs, reef_dispersion)
 reef_intercepts$geographic <- rownames(reef_intercepts)
 
 landings_drivers <- merge(landings_models, reef_intercepts, by="geographic")
@@ -1539,10 +1409,10 @@ landings_PC1_drivers_model <- brm(fide_PC1 ~
                                     z_score_2sd(wind) +
                                     gear + 
                                     z_score_2sd(num_fishers_lines) + 
-                                           (1 | geographic) + (1 | Fisher.Name),
+                                    (1 | geographic) + (1 | Fisher.Name),
                                   c(set_prior(class="Intercept", "normal(0,1)"),
                                     set_prior(class="b", "normal(0,1)")),
-                                       family=gaussian, data=landings_drivers, chains=4, iter=4000,
+                                  family=gaussian, data=landings_drivers, chains=4, iter=4000,
                                   control = list(adapt_delta=0.95))
 
 summary(landings_PC1_drivers_model, prob=0.90)
@@ -1568,120 +1438,74 @@ ppc_dens_overlay(y, yrep[1:100,])
 ppc_stat(y, yrep, stat="mean")
 plot(colMeans(yrep), y)
 
-######################
-# FUNCTIONAL ENTROPY #
-######################
+#########################
+# FUNCTIONAL DISPERSION #
+#########################
 
-landings_entropy_drivers_model <- brm((FD_q1+1) ~ 
-                                               z_score_2sd(reef_entropy+1) + 
-                                               z_score_2sd(fishing_events) + 
-                                               z_score_2sd(wave_energy) + 
-                                               z_score_2sd(tot_grav_pop) +
-                                               moon_phase + 
-                                               z_score_2sd(wind) +
-                                               gear + 
-                                               z_score_2sd(num_fishers_lines) + 
-                                            (1 | geographic) + (1 | Fisher.Name),
-                                            c(set_prior(class="Intercept", "normal(0,1)"),
-                                              set_prior(class="b", "normal(0,1)")),
-                                       family=Gamma(link="log"), data=landings_drivers, chains=4, iter=2000,
-                                       control = list(adapt_delta=0.95))
+landings_dispersion_drivers_model <- brm((fdis+1) ~ 
+                                        z_score_2sd(reef_dispersion+1) + 
+                                        z_score_2sd(fishing_events) + 
+                                        z_score_2sd(wave_energy) + 
+                                        z_score_2sd(tot_grav_pop) +
+                                        moon_phase + 
+                                        z_score_2sd(wind) +
+                                        gear + 
+                                        z_score_2sd(num_fishers_lines) + 
+                                        (1 | geographic) + (1 | Fisher.Name),
+                                      c(set_prior(class="Intercept", "normal(0,1)"),
+                                        set_prior(class="b", "normal(0,1)")),
+                                      family=Gamma(link="log"), data=landings_drivers, chains=4, iter=2000,
+                                      control = list(adapt_delta=0.95))
 
-summary(landings_entropy_drivers_model, prob=0.90)
-landings_entropy_drivers <- data.frame(as.matrix(landings_entropy_drivers_model))
-landings_entropy_drivers$spearguns <- rep(0)
-landings_entropy_drivers <- landings_entropy_drivers %>%
-  select('b_z_score_2sdreef_entropyP1','b_z_score_2sdtot_grav_pop', 'b_z_score_2sdfishing_events', 
+summary(landings_dispersion_drivers_model, prob=0.90)
+landings_dispersion_drivers <- data.frame(as.matrix(landings_dispersion_drivers_model))
+landings_dispersion_drivers$spearguns <- rep(0)
+landings_dispersion_drivers <- landings_dispersion_drivers %>%
+  select('b_z_score_2sdreef_dispersionP1','b_z_score_2sdtot_grav_pop', 'b_z_score_2sdfishing_events', 
          'b_z_score_2sdwave_energy', 'b_z_score_2sdwind',
          'b_moon_phasemediummoon', 'b_moon_phasebigmoon',
          'b_gearShallowBottomFishing','spearguns', 'b_z_score_2sdnum_fishers_lines')
-mcmc_intervals(landings_entropy_drivers, point_est = "median", prob = 0.5, prob_outer = 0.90,
+mcmc_intervals(landings_dispersion_drivers, point_est = "median", prob = 0.5, prob_outer = 0.90,
                outer_size = 1,
                inner_size = 4,
                point_size = 6) + geom_vline(xintercept = 0)
 
-model_data <- landings_drivers[,c("FD_q1","reef_entropy","fishing_events",
+model_data <- landings_drivers[,c("fdis","reef_dispersion","fishing_events",
                                   "wave_energy","tot_grav_pop","moon_phase","wind",
                                   "gear","num_fishers_lines","geographic","Fisher.Name")]
 model_data <- na.omit(model_data)
-y <- model_data$FD_q1+1
-yrep <- posterior_predict(landings_entropy_drivers_model,draws=100)
+y <- model_data$fdis+1
+yrep <- posterior_predict(landings_dispersion_drivers_model,draws=100)
 ppc_dens_overlay(y, yrep[1:100,])
 ppc_stat(y, yrep, stat="mean")
 plot(colMeans(yrep), y)
-
-############
-# EVENNESS #
-############
-
-landings_feve_drivers_model <- brm(feve ~ 
-                                     z_score_2sd(reef_feve) + 
-                                     z_score_2sd(fishing_events) + 
-                                     z_score_2sd(wave_energy) + 
-                                     z_score_2sd(tot_grav_pop) +
-                                     moon_phase + 
-                                     z_score_2sd(wind) +
-                                     gear + 
-                                     z_score_2sd(num_fishers_lines) + 
-                                     (1 | geographic) + (1 | Fisher.Name),
-                                   c(set_prior(class="Intercept", "normal(0,1)"),
-                                     set_prior(class="b", "normal(0,1)")),
-                                        family=Beta(link = "logit", link_phi = "log"), 
-                                   data=landings_drivers, chains=4, iter=2000,
-                                   control = list(adapt_delta=0.95))
-
-summary(landings_feve_drivers_model, prob=0.9)
-landings_feve_drivers <- data.frame(as.matrix(landings_feve_drivers_model))
-landings_feve_drivers$spearguns <- rep(0)
-landings_feve_drivers <- landings_feve_drivers %>%
-  select('b_z_score_2sdreef_feve','b_z_score_2sdtot_grav_pop', 'b_z_score_2sdfishing_events',
-         'b_z_score_2sdwave_energy', 'b_z_score_2sdwind',
-         'b_moon_phasemediummoon', 'b_moon_phasebigmoon',
-         'b_gearShallowBottomFishing','spearguns', 'b_z_score_2sdnum_fishers_lines')
-mcmc_intervals(landings_feve_drivers, point_est = "median", prob = 0.5, prob_outer = 0.90,
-               outer_size = 1,
-               inner_size = 4,
-               point_size = 6) + geom_vline(xintercept = 0)
-
-model_data <- landings_drivers[,c("feve","reef_feve","fishing_events",
-                                  "wave_energy","tot_grav_pop","moon_phase","wind",
-                                  "gear","num_fishers_lines","geographic","Fisher.Name")]
-model_data <- na.omit(model_data)
-y <- model_data$feve
-yrep <- posterior_predict(landings_feve_drivers_model,draws=100)
-ppc_dens_overlay(y, yrep[1:100,])
-ppc_stat(y, yrep, stat="mean")
-plot(colMeans(yrep), y)
-
 
 ##########################
 ## MODEL SUMMARY TABLES ##
 ##########################
 
 tab_model(landings_PC1_drivers_model, show.ci=0.90, title="Landings Functional Identity PC1 Drivers")
-tab_model(landings_entropy_drivers_model, show.ci=0.90, title="Landings Functional Identity PC1 Drivers")
-tab_model(landings_feve_drivers_model, show.ci=0.90, title="Landings Functional Identity PC1 Drivers")
+tab_model(landings_dispersion_drivers_model, show.ci=0.90, title="Landings Functional Identity PC1 Drivers")
 
 ######################################################
 ## RELATION OF MEAN PREFERENCE TO DIVERSITY METRICS ##
 ######################################################
 
-pref_model <- brm(market_pref ~ z_score_2sd(fide_PC1) + z_score_2sd(feve) + z_score_2sd(FD_q1) +
-                                           (1 | geographic) + (1 | Fisher.Name),
-                                         family=gaussian, data=landings_drivers, chains=4, iter=2000)
+pref_model <- brm(market_pref ~ z_score_2sd(fide_PC1) + z_score_2sd(fdis) +
+                    (1 | geographic) + (1 | Fisher.Name),
+                  family=gaussian, data=landings_drivers, chains=4, iter=2000)
 
 summary(pref_model, prob=0.90)
-posterior_summary(pref_model, pars=c("fide_PC1","FD_q1"), prob=c(0.1,0.9))
+posterior_summary(pref_model, pars=c("fide_PC1","fdis"), prob=c(0.1,0.9))
 pref_drivers <- data.frame(as.matrix(pref_model)) %>%
-  dplyr::select(b_z_score_2sdfide_PC1, b_z_score_2sdfeve, b_z_score_2sdFD_q1 )
+  dplyr::select(b_z_score_2sdfide_PC1, b_z_score_2sdfdis )
 mcmc_intervals(pref_drivers, point_est = "median", prob = 0.5, prob_outer = 0.90,
                outer_size = 1,
                inner_size = 4,
                point_size = 6) + 
   geom_vline(xintercept = 0) +
   scale_y_discrete(
-    labels = c("b_z_score_2sdFD_q1" = "Functional Entropy",
-               "b_z_score_2sdfeve" = "Functional Evenness",
+    labels = c("b_z_score_2sdfdis" = "Functional Entropy",
                "b_z_score_2sdfide_PC1" = "Functional Identity (PC1)")) +
   ggtitle("Mean Fisher Preference")
 tab_model(pref_model, show.ci=0.90, title="Preference and Trait Diversity Model")
