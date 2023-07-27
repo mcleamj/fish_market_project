@@ -1053,7 +1053,7 @@ ggplot(di_diff,aes(geographic,diff)) +
 
 
 #########################
-# FUNCTIONAL DISPERSION #
+# FUNCTIONAL ENTROPY  #
 #########################
 
 graphics.off()
@@ -1471,7 +1471,7 @@ ppc_stat(y, yrep, stat="mean")
 plot(colMeans(yrep), y)
 
 #########################
-# FUNCTIONAL DISPERSION #
+# FUNCTIONAL ENTROPY  #
 #########################
 
 landings_entropy_drivers_model <- brm((FD_q1+1) ~ 
