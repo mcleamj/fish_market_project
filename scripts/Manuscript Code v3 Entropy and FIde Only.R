@@ -1563,3 +1563,198 @@ tab_model(CPUE, show.ci=0.90, title="CPUE and Preferece Model")
 #                point_size = 6) + geom_vline(xintercept = 0)
 
 
+
+
+
+
+######################################################
+## CODE TO MAKE TRAIT SPACE FIGURE WITH PC3 AND PC4 ##
+######################################################
+
+
+#################
+# PC 3 CENTROID #
+#################
+
+reef_PC3_model <- brm(log(fide_PC3+1) ~ (1 | geographic/site/site_year), 
+                      set_prior(class="Intercept", "normal(0,1)"),
+                      data=reef_models,
+                      family=gaussian, chains=4, iter=2000)
+
+reef_PC3_draws <- data.frame(as.matrix(reef_PC3_model))
+reef_PC3 <- reef_PC3_draws %>%
+  dplyr::select("r_geographic.East.Intercept.":"r_geographic.West.Intercept.")
+reef_PC3 <- exp(reef_PC3 + reef_PC3_draws$b_Intercept) - 1
+colnames(reef_PC3) <- geo_coords$geographic
+PC3_centroid_reefs <- apply(reef_PC3, 2, median)
+plot(reef_raw_avg$fide_PC3, PC3_centroid_reefs, pch=19)
+
+#################
+# PC 4 CENTROID #
+#################
+
+reef_PC4_model <- brm(fide_PC4 ~ (1 | geographic/site/site_year), 
+                      set_prior(class="Intercept", "normal(0,1)"),
+                      data=reef_models,
+                      family=gaussian, chains=4, iter=2000)
+
+reef_PC4_draws <- data.frame(as.matrix(reef_PC4_model))
+reef_PC4 <- reef_PC4_draws %>%
+  dplyr::select("r_geographic.East.Intercept.":"r_geographic.West.Intercept.")
+reef_PC4 <- reef_PC4 + reef_PC4_draws$b_Intercept
+colnames(reef_PC4) <- geo_coords$geographic
+PC4_centroid_reefs <- apply(reef_PC4, 2, median)
+plot(reef_raw_avg$fide_PC4, PC4_centroid_reefs,pch=19)
+
+
+
+
+
+#################
+# PC 3 CENTROID #
+#################
+
+landings_PC3_model <- brm(fide_PC3 ~ (1 | geographic) + (1 | Fisher.Name),
+                          set_prior(class="Intercept", "normal(0,1)"),
+                          data=landings_models,
+                          family=gaussian, chains=4, iter=2000)
+
+landings_PC3_draws <- data.frame(as.matrix(landings_PC3_model))
+landings_PC3 <- landings_PC3_draws %>%
+  select(starts_with("r_geographic"))
+landings_PC3 <- landings_PC3 + landings_PC3_draws$b_Intercept
+colnames(landings_PC3) <- geo_coords$geographic
+PC3_centroid_landings <- apply(landings_PC3, 2, median)
+plot(landings_raw_avg$fide_PC3, PC3_centroid_landings,pch=19)
+plot(landings_raw_avg$fide_PC3, PC3_centroid_landings,pch=19,
+     xlim=range(c(landings_raw_avg$fide_PC3, PC3_centroid_landings)),
+     ylim=range(c(landings_raw_avg$fide_PC3, PC3_centroid_landings)))
+abline(0,1)
+
+
+#################
+# PC 4 CENTROID #
+#################
+
+landings_PC4_model <- brm(fide_PC4 ~ (1 | geographic) + (1 | Fisher.Name),
+                          set_prior(class="Intercept", "normal(0,1)"),
+                          data=landings_models,
+                          family=gaussian, chains=4, iter=2000)
+
+landings_PC4_draws <- data.frame(as.matrix(landings_PC4_model))
+landings_PC4 <- landings_PC4_draws %>%
+  select(starts_with("r_geographic"))
+landings_PC4 <- landings_PC4 + landings_PC4_draws$b_Intercept
+colnames(landings_PC4) <- geo_coords$geographic
+PC4_centroid_landings <- apply(landings_PC4, 2, median)
+plot(landings_raw_avg$fide_PC4, PC4_centroid_landings,pch=19)
+
+
+###########################
+## PANEL A - TRAIT SPACE ##
+###########################
+
+graphics.off()
+par(mfrow=c(2,2))
+
+plot(PC3, PC4, cex=0, cex.axis=1.2, cex.lab=1.2)
+
+hpts <- chull(cbind(PC3,PC4))
+hpts <- c(hpts, hpts[1])
+polygon(cbind(PC3,PC4)[hpts, ], col = adjustcolor("grey",alpha.f=0.3), border="grey")
+
+points(PC3,PC4,pch=21,col=1,bg="grey",cex=1.5)
+
+mtext("A", font=2, cex=1.5, adj=-0.1, line=0.5)
+
+#######################
+## PANEL B - VECTORS ##
+#######################
+
+plot(PC3, PC4, cex=0, cex.axis=1.2, cex.lab=1.2)
+plot(vectors_3_4,col=1)
+
+mtext("B", font=2, cex=1.5, adj=-0.1, line=0.5)
+
+#################################
+## PANEL C - DIET CONVEX HULLS ##
+#################################
+
+species_info$diet_col <- ifelse(species_info$Diet=="Grazer",diet_cols[1],
+                                ifelse(species_info$Diet=="Microphage",diet_cols[2],
+                                       ifelse(species_info$Diet=="Planktivore",diet_cols[3],
+                                              ifelse(species_info$Diet=="Omnivore",diet_cols[4],
+                                                     ifelse(species_info$Diet=="Invertivore",diet_cols[5],
+                                                            ifelse(species_info$Diet=="Piscivore",diet_cols[6],NA))))))
+
+
+plot(PC3, PC4, cex=0, cex.axis=1.2, cex.lab=1.2)
+
+legend("bottomleft",legend=c("Grazers","Microphages","Planktivores","Omnivores","Invertivores","Piscivores"),
+       col=diet_cols,
+       pch=19,
+       cex=1)
+
+trophic_scores <- data.frame(species_info$Diet, PC3, PC4)
+diet_hull <- subset(trophic_scores, trophic_scores$species_info.Diet=="Grazer")[,2:3]
+hpts <- chull(diet_hull)
+hpts <- c(hpts, hpts[1])
+polygon(diet_hull[hpts, ], col = adjustcolor(diet_cols[1],alpha.f=0.1), border=diet_cols[1])
+
+trophic_scores <- data.frame(species_info$Diet, PC3, PC4)
+diet_hull <- subset(trophic_scores, trophic_scores$species_info.Diet=="Microphage")[,2:3]
+hpts <- chull(diet_hull)
+hpts <- c(hpts, hpts[1])
+polygon(diet_hull[hpts, ], col = adjustcolor(diet_cols[2],alpha.f=0.1), border=diet_cols[2])
+
+trophic_scores <- data.frame(species_info$Diet, PC3, PC4)
+diet_hull <- subset(trophic_scores, trophic_scores$species_info.Diet=="Planktivore")[,2:3]
+hpts <- chull(diet_hull)
+hpts <- c(hpts, hpts[1])
+polygon(diet_hull[hpts, ], col = adjustcolor(diet_cols[3],alpha.f=0.1), border=diet_cols[3])
+
+trophic_scores <- data.frame(species_info$Diet, PC3, PC4)
+diet_hull <- subset(trophic_scores, trophic_scores$species_info.Diet=="Omnivores")[,2:3]
+hpts <- chull(diet_hull)
+hpts <- c(hpts, hpts[1])
+polygon(diet_hull[hpts, ], col = adjustcolor(diet_cols[4],alpha.f=0.1), border=diet_cols[4])
+
+trophic_scores <- data.frame(species_info$Diet, PC3, PC4)
+diet_hull <- subset(trophic_scores, trophic_scores$species_info.Diet=="Invertivore")[,2:3]
+hpts <- chull(diet_hull)
+hpts <- c(hpts, hpts[1])
+polygon(diet_hull[hpts, ], col = adjustcolor(diet_cols[5],alpha.f=0.1), border=diet_cols[5])
+
+trophic_scores <- data.frame(species_info$Diet, PC3, PC4)
+diet_hull <- subset(trophic_scores, trophic_scores$species_info.Diet=="Piscivore")[,2:3]
+hpts <- chull(diet_hull)
+hpts <- c(hpts, hpts[1])
+polygon(diet_hull[hpts, ], col = adjustcolor(diet_cols[6],alpha.f=0.1), border=diet_cols[6])
+
+points(PC3, PC4,
+       pch=19,col=species_info$diet_col, cex=1.5)
+
+mtext("C", font=2, cex=1.5, adj=-0.1, line=0.5)
+
+
+#########################
+## PANEL D - CENTROIDS ##
+#########################
+
+# NOTE - WE CAN SET ZOOM TO ANY SCALE ON PANEL D
+# BY PLAYING WITH X AND Y LIMITS
+
+plot(PC3, PC4, cex=0, cex.lab=1.2, cex.axis=1.2,
+     xlim=range(1.5*c(PC3_centroid_reefs, PC3_centroid_landings)),
+     ylim=range(2*c(PC4_centroid_reefs, PC4_centroid_landings)))
+
+points(PC3_centroid_reefs, PC4_centroid_reefs,
+       pch=21, col=1, bg="blue", cex=2)
+
+points(PC3_centroid_landings, PC4_centroid_landings,
+       pch=21, col=1, bg="red", cex=2)
+
+legend("topright", legend=c("Reef Observations", "Market Landings"),
+       pch=19, col=c("blue","red"), pt.cex=1.5)
+
+mtext("D", font=2, cex=1.5, adj=-0.1, line=0.5)
