@@ -186,6 +186,11 @@ reef_entropy <- reef_entropy$asb_FD_Hill
 
 reef_FD <- data.frame(reef_FD, reef_entropy = reef_entropy)
 
+# CWM TRAITS 
+cwm_reef <- functcomp(traits, reef_log)
+mean(cwm_reef$max_length)
+sd(cwm_reef$max_length)
+
 ##############
 ## LANDINGS ##
 ##############
@@ -208,6 +213,11 @@ market_entropy <- alpha.fd.hill(market_log, sp_dist, tau="mean", q=1)
 market_entropy <- market_entropy$asb_FD_Hill
 
 market_FD <- data.frame(market_FD, market_entropy=market_entropy)
+
+# CWM
+market_cwm <- functcomp(traits, market_log)
+mean(market_cwm$max_length)
+sd(market_cwm$max_length)
 
 ########################################################################
 ## PROXY FOR SPECIES DESIRABILITY USING THE PREDATOR PREFERENCE INDEX
@@ -1435,9 +1445,9 @@ levels(landings_drivers$gear)
 landings_PC1_drivers_model <- brm(fide_PC1 ~ 
                                     z_score_2sd(PC1_centroid_reefs) + 
                                     z_score_2sd(fishing_events) + 
-                                    z_score_2sd(wave_energy) + 
+                                    #z_score_2sd(wave_energy) + 
                                     z_score_2sd(tot_grav_pop) +
-                                    moon_phase + 
+                                    #moon_phase + 
                                     z_score_2sd(wind) +
                                     gear + 
                                     z_score_2sd(num_fishers_lines) + 
@@ -1452,8 +1462,9 @@ landings_PC1_drivers <- data.frame(as.matrix(landings_PC1_drivers_model))
 landings_PC1_drivers$spearguns <- rep(0)
 landings_PC1_drivers <- landings_PC1_drivers %>%
   select('b_z_score_2sdPC1_centroid_reefs','b_z_score_2sdtot_grav_pop', 'b_z_score_2sdfishing_events', 
-         'b_z_score_2sdwave_energy', 'b_z_score_2sdwind',
-         'b_moon_phasemediummoon', 'b_moon_phasebigmoon',
+         #'b_z_score_2sdwave_energy', 
+         'b_z_score_2sdwind',
+         #'b_moon_phasemediummoon', 'b_moon_phasebigmoon',
          'b_gearShallowBottomFishing','spearguns', 'b_z_score_2sdnum_fishers_lines')
 mcmc_intervals(landings_PC1_drivers, point_est = "median", prob = 0.5, prob_outer = 0.90,
                outer_size = 1,
@@ -1477,9 +1488,9 @@ plot(colMeans(yrep), y)
 landings_entropy_drivers_model <- brm((FD_q1+1) ~ 
                                            z_score_2sd(reef_entropy+1) + 
                                            z_score_2sd(fishing_events) + 
-                                           z_score_2sd(wave_energy) + 
+                                           #z_score_2sd(wave_energy) + 
                                            z_score_2sd(tot_grav_pop) +
-                                           moon_phase + 
+                                           #moon_phase + 
                                            z_score_2sd(wind) +
                                            gear + 
                                            z_score_2sd(num_fishers_lines) + 
@@ -1494,8 +1505,9 @@ landings_entropy_drivers <- data.frame(as.matrix(landings_entropy_drivers_model)
 landings_entropy_drivers$spearguns <- rep(0)
 landings_entropy_drivers <- landings_entropy_drivers %>%
   select('b_z_score_2sdreef_entropyP1','b_z_score_2sdtot_grav_pop', 'b_z_score_2sdfishing_events', 
-         'b_z_score_2sdwave_energy', 'b_z_score_2sdwind',
-         'b_moon_phasemediummoon', 'b_moon_phasebigmoon',
+         #'b_z_score_2sdwave_energy', 
+         'b_z_score_2sdwind',
+         #'b_moon_phasemediummoon', 'b_moon_phasebigmoon',
          'b_gearShallowBottomFishing','spearguns', 'b_z_score_2sdnum_fishers_lines')
 mcmc_intervals(landings_entropy_drivers, point_est = "median", prob = 0.5, prob_outer = 0.90,
                outer_size = 1,
@@ -1525,7 +1537,7 @@ tab_model(landings_entropy_drivers_model, show.ci=0.90, title="Landings Function
 
 pref_model <- brm(market_pref ~ z_score_2sd(fide_PC1) + z_score_2sd(FD_q1) +
                     (1 | geographic) + (1 | Fisher.Name),
-                  family=gaussian, data=landings_drivers, chains=4, iter=2000)
+                  family=Gamma(link="log"), data=landings_drivers, chains=4, iter=2000)
 
 summary(pref_model, prob=0.90)
 posterior_summary(pref_model, pars=c("fide_PC1","FD_q1"), prob=c(0.1,0.9))
