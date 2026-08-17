@@ -1,6 +1,5 @@
 # fish_market_project
-Repository for Emma Touchie thesis project
-
+Repository for Kosrae fish market study
 # content
 
 :file_folder:[data](/data) contains raw data files that should not be modified
@@ -9,6 +8,5 @@ Repository for Emma Touchie thesis project
 
 :file_folder:[outputs](/outputs) contains outputs and results stored as .Rdata, .rds, etc.
 
-:file_folder:[figures](/figures) contains figures created during analyses
 
 # TESTING #
