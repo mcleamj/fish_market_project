@@ -4,8 +4,6 @@
 
 # Session Data files
 .RData
-
-# User-specific files
 .Ruserdata
 
 # Example code in package build process
@@ -20,26 +18,33 @@
 # RStudio files
 .Rproj.user/
 
-# produced vignettes
+# Produced vignettes
 vignettes/*.html
 vignettes/*.pdf
 
-# OAuth2 token, see https://github.com/hadley/httr/releases/tag/v0.3
+# OAuth2 token
 .httr-oauth
 
-# knitr and R markdown default cache directories
+# Knitr and R Markdown default cache directories
 *_cache/
 /cache/
 
-# Temporary files created by R markdown
+# Temporary files created by R Markdown
 *.utf8.md
 *.knit.md
 
 # R Environment Variables
 .Renviron
 
-#Big files
+# OS System Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
 
+# Custom Folders & Big Files
 /data/BIG_FILES/
+/data/other_data/
 /outputs/BIG_FILES/
-
+/hidden/
+/figures/
+/scripts/old/
